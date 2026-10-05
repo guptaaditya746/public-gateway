@@ -1,22 +1,26 @@
+"""Export reviewed, answered harness runs (config/public-examples.json) as the public examples.
+
+    uv run python scripts/export_public_examples.py   # reads $HARNESS_ROOT/artifacts/<run id>/run.json
+"""
+
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
-import sys
 from pathlib import Path
 
 from harness_public_gateway.app import project_run
-from harness_schema.models import Run
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "packages" / "public_gateway" / "src"))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", default="config/public-examples.json")
-    parser.add_argument("--artifacts", default="artifacts")
+    parser.add_argument("--artifacts", default=str(Path(os.environ.get("HARNESS_ROOT", "../rambodambo")).expanduser()
+                                                   / "artifacts"), help="the harness runs (default $HARNESS_ROOT/artifacts)")
     parser.add_argument("--output", default="public_examples/examples.json")
     args = parser.parse_args()
     manifest = json.loads(Path(args.manifest).read_text())
@@ -28,15 +32,15 @@ def main() -> None:
     result = []
     for run_id in ids:
         path = Path(args.artifacts) / run_id / "run.json"
-        run = Run.model_validate_json(path.read_text())
-        if run.status != "answered" or run.chosen_reading is None:
+        run = json.loads(path.read_text())
+        if run.get("status") != "answered" or run.get("chosenReading") is None:
             raise SystemExit(f"manifest run {run_id} is not answered")
-        public = project_run(run.model_dump(by_alias=True))
+        public = project_run(run)
         if public["state"] != "answered" or not public.get("evidence") or not public.get("triples"):
             raise SystemExit(f"manifest run {run_id} failed public provenance review")
         result.append(
             {
-                "question": run.question,
+                "question": run["question"],
                 "answer": public["answer"],
                 "evidence": public["evidence"],
                 "triples": public["triples"],

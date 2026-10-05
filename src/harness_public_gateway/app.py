@@ -967,7 +967,8 @@ def create_app(
     # which serves the public bundle and its narrowly scoped API together.
     # Private API/MCP ports remain loopback-only and are never mounted here.
     if os.getenv("PUBLIC_SERVE_FRONTEND", "false").lower() == "true":
-        frontend = Path(__file__).resolve().parents[4] / "web" / "dist"
+        # The built UI of this repository (web/dist), or PUBLIC_FRONTEND_DIR.
+        frontend = Path(os.getenv("PUBLIC_FRONTEND_DIR") or Path(__file__).resolve().parents[2] / "web" / "dist")
         if not (frontend / "index.html").is_file():
             raise RuntimeError("public frontend build is missing")
         app.mount("/", StaticFiles(directory=frontend, html=True), name="public-frontend")

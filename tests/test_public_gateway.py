@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+
 from harness_public_gateway.app import Config, TurnstileVerifier, create_app, project_run
 
 
@@ -49,6 +50,7 @@ def test_projection_fails_closed_and_never_returns_private_fields():
 
 def test_private_origin_loopback_only_and_no_path_input():
     import pytest
+
     from harness_public_gateway.app import LoopbackPrivateClient
 
     with pytest.raises(ValueError):
@@ -96,6 +98,7 @@ def test_only_public_routes_and_opaque_mapping():
 def test_queue_and_client_limits_do_not_start_private_work():
     import pytest
     from fastapi import HTTPException
+
     from harness_public_gateway.app import Admission
 
     private = FakePrivate()
@@ -114,6 +117,7 @@ def test_queue_and_client_limits_do_not_start_private_work():
 def test_single_active_run_per_client():
     import pytest
     from fastapi import HTTPException
+
     from harness_public_gateway.app import Admission
 
     admission = Admission(FakePrivate())
@@ -245,6 +249,7 @@ def test_wildcard_cors_origin_is_rejected():
 
 def test_turnstile_posts_secret_and_token_to_server_verifier(monkeypatch):
     import httpx
+
     from harness_public_gateway.app import TurnstileVerifier
 
     seen = {}
@@ -372,6 +377,7 @@ def test_development_bypass_is_rejected_in_production():
 def test_private_client_uses_fixed_routes_and_public_marker(monkeypatch):
     import httpx
     import pytest
+
     from harness_public_gateway.app import LoopbackPrivateClient
 
     requests = []

@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
+# A temporary public preview: the harness's corpus server and private API on loopback (started from
+# the harness checkout at HARNESS_ROOT), and this gateway serving the public UI and its narrow API on
+# 127.0.0.1:8787, the only port to put behind a tunnel. See docs/PUBLIC_DEPLOYMENT.md.
+#
+#   HARNESS_ROOT=~/thesis/rambodambo ./scripts/public-preview.sh
 set -euo pipefail
 
 project_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+harness_root=$(cd "${HARNESS_ROOT:-$project_dir/../rambodambo}" 2>/dev/null && pwd) || {
+  printf 'Set HARNESS_ROOT to the harness checkout (its .env holds the private API settings).\n' >&2
+  exit 2
+}
 cd "$project_dir"
 
 if [[ -z "${VITE_TURNSTILE_SITE_KEY:-}" ]]; then
@@ -21,8 +30,8 @@ if [[ "${PUBLIC_DEV_BYPASS:-false}" == "true" || "${PUBLIC_TURNSTILE_ENABLED:-tr
   exit 2
 fi
 
-if [[ ! -f .env ]]; then
-  printf 'Missing repository .env required by the private research API.\n' >&2
+if [[ ! -f "$harness_root/.env" ]]; then
+  printf 'Missing %s/.env, required by the private research API.\n' "$harness_root" >&2
   exit 2
 fi
 
@@ -33,10 +42,9 @@ for port in 8000 8765 8787; do
   fi
 done
 
-VITE_PUBLIC_INTERACTIVE=true \
 VITE_PUBLIC_API_BASE='' \
 VITE_TURNSTILE_SITE_KEY="$VITE_TURNSTILE_SITE_KEY" \
-  corepack pnpm --dir web build:public
+  corepack pnpm --dir web build
 
 cleanup() {
   trap - EXIT INT TERM
@@ -45,11 +53,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-MCP_CORPUS_TRANSPORT=streamable-http uv run --python 3.12 python -m harness_mcp_corpus.server &
+(cd "$harness_root" && MCP_CORPUS_TRANSPORT=streamable-http uv run --python 3.12 python -m harness_mcp_corpus.server) &
 mcp_pid=$!
 
-HARNESS_MAX_CONCURRENT_PUBLIC_RUNS="${HARNESS_MAX_CONCURRENT_PUBLIC_RUNS:-1}" \
-  uv run --python 3.12 uvicorn main:app --app-dir api --host 127.0.0.1 --port 8000 --env-file .env &
+(cd "$harness_root" && HARNESS_MAX_CONCURRENT_PUBLIC_RUNS="${HARNESS_MAX_CONCURRENT_PUBLIC_RUNS:-1}" \
+  uv run --python 3.12 uvicorn main:app --app-dir api --host 127.0.0.1 --port 8000 --env-file .env) &
 api_pid=$!
 
 printf 'Waiting for the private API on loopback…\n'
@@ -78,8 +86,7 @@ PUBLIC_ALLOWED_ORIGINS='' \
 PUBLIC_IDENTITY_SALT="$PUBLIC_IDENTITY_SALT" \
 PUBLIC_SERVE_FRONTEND=true \
 TURNSTILE_SECRET_KEY="$TURNSTILE_SECRET_KEY" \
-  uv run --project packages/public_gateway uvicorn harness_public_gateway.app:app \
-    --app-dir packages/public_gateway/src --host 127.0.0.1 --port 8787 &
+  uv run uvicorn harness_public_gateway.app:app --host 127.0.0.1 --port 8787 &
 gateway_pid=$!
 
 printf '\nPublic preview is ready at http://127.0.0.1:8787\n'
